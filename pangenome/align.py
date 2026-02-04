@@ -44,7 +44,7 @@ class Aligner:
         return
       unvisited.remove(node)
       visiting.add(node)
-      for neighbor in self.preds[node]:
+      for neighbor in self.succs[node]:
         visit(neighbor)
       visiting.remove(node)
       self.topo.insert(0, node)

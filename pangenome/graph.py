@@ -30,6 +30,7 @@ def gfa2graph(file_path: str):
   graph = Graph()
   with open(file_path, 'r') as file:
     for line in file:
+      line = line.rstrip()
       if line[0] in ['#', 'H'] or not line: continue
       components = line.split('\t')
       match components[0]:

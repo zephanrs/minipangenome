@@ -3,13 +3,16 @@ import graphviz
 import matplotlib.pyplot as plt
 from .graph import Graph
 from .seed import Seed
+from .align import Edit
 
 def _palette(n: int):
   cmap = plt.get_cmap("tab10")
   return [f"#{int(r*255):02x}{int(g*255):02x}{int(b*255):02x}"
           for r, g, b, _ in (cmap(i) for i in range(n))]
 
-def create_graph(graph: Graph, name: str):
+ALIGN_COLOR = _palette(4)[3]  # tab10 red
+
+def create_graph(graph: Graph, name: str, hedges=None):
   dot = graphviz.Digraph(filename=name, engine='dot', format='png')
   dot.attr(rankdir='LR', nodesep='0.5', ranksep='0.8')
   dot.attr('node', shape='box', fontname='Helvetica',
@@ -24,9 +27,15 @@ def create_graph(graph: Graph, name: str):
   # graph edges
   for src, dsts in graph.edges.items():
     for dst in dsts:
+      u, v = src.node, dst.node
       srcp = "w" if src.rev else "e"
       dstp = "e" if dst.rev else "w"
-      dot.edge(f"{src.node}:{srcp}", f"{dst.node}:{dstp}", color="black")
+
+      if hedges and (u, v) in hedges:
+        dot.edge(f"{u}:{srcp}", f"{v}:{dstp}",
+                 color=ALIGN_COLOR, penwidth="3")
+      else:
+        dot.edge(f"{u}:{srcp}", f"{v}:{dstp}", color="black")
 
   return dot
 
@@ -72,18 +81,44 @@ def draw_seeds(dot, graph, query, seeds, k, draw_links):
     s.attr(rank="sink")
     s.node("query")
 
-  if draw_links:
-    for color, seed in zip(colors, seeds[:8]):
-      dot.edge("query", seed.node, color=color, penwidth="2")
-
 def seeds2png(graph: Graph, query: str, seeds: list[Seed],
               k: int, name: str, view=False):
   dot = create_graph(graph, name)
   draw_seeds(dot, graph, query, seeds, k, draw_links=False)
   dot.render(cleanup=True, view=view)
 
-def chain2png(graph: Graph, query: str, chain: list[Seed],
-              k: int, name: str, view=False):
-  dot = create_graph(graph, name)
-  draw_seeds(dot, graph, query, chain, k, draw_links=True)
+def align2png(graph: Graph, query: str, edits: list[Edit],
+              name: str, view=False):
+
+  # ordered path of nodes
+  path = []
+  for e in edits:
+    if not path or path[-1] != e.node:
+      path.append(e.node)
+
+  hedges = set(zip(path, path[1:]))
+
+  dot = create_graph(graph, name, hedges=hedges)
+
+  # recolor existing nodes
+  for node in path:
+    dot.node(node, color=ALIGN_COLOR, penwidth="3")
+
   dot.render(cleanup=True, view=view)
+
+def alignment_strings(graph: Graph, query: str, edits: list[Edit]):
+  q = []
+  r = []
+
+  for e in edits:
+    if e.op in ("M", "X"):
+      q.append(query[e.qpos])
+      r.append(graph.nodes[e.node][e.npos])
+    elif e.op == "I":
+      q.append(query[e.qpos])
+      r.append("-")
+    elif e.op == "D":
+      q.append("-")
+      r.append(graph.nodes[e.node][e.npos])
+
+  return "".join(q), "".join(r)
